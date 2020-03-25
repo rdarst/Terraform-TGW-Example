@@ -1,4 +1,14 @@
 #!/bin/bash
-sudo apt update
-sudo apt -y install docker docker.io
-sudo docker run -d -p 80:80 -p 443:443 -h web3 -e APPSERVER="http://172.21.102.23:8080" benpiper/mtwa:web
+until sudo apt-get update && sudo apt-get -y install apache2; do
+    sleep 1
+done
+until curl \
+    --output /var/www/html/CloudGuard.png \
+    --url https://www.checkpoint.com/wp-content/uploads/cloudguard-hero-image.png ; do
+    sleep 1
+ done
+ sudo chmod a+w /var/www/html/index.html
+ echo "<html><head></head><body><center><H1>" > /var/www/html/index.html
+ echo $HOSTNAME >> /var/www/html/index.html
+ echo "<BR><BR>Check Point CloudGuard Terraform Demo <BR><BR>Any Cloud, Any App, Unmatched Security<BR><BR>" >> /var/www/html/index.html
+ echo "<img src=\"/CloudGuard.png\" height=\"25%\">" >> /var/www/html/index.html

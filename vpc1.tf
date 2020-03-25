@@ -5,9 +5,18 @@ resource "aws_vpc" "vpc1" {
   }
 }
 
-# Create an internet gateway to give our subnet access to the outside world
-resource "aws_internet_gateway" "vpc1_igw" {
-  vpc_id = aws_vpc.vpc1.id
+# Setup routes to VPC spokes on main route table
+resource "aws_route" "vpc1_edge_tgw_access" {
+  route_table_id         = aws_vpc.vpc_edge.main_route_table_id
+  destination_cidr_block = "172.20.0.0/14"
+  transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
+}
+
+# Attach  TGW to vpc1
+resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach_vpc1" {
+  subnet_ids         = [aws_subnet.vpc1_webserver_subnet1.id, aws_subnet.vpc1_webserver_subnet2.id ]
+  transit_gateway_id = aws_ec2_transit_gateway.tgw.id
+  vpc_id             = aws_vpc.vpc1.id
 }
 
 # Grant the VPC internet access on its main route table
@@ -16,13 +25,6 @@ resource "aws_route" "vpc1_internet_access" {
   destination_cidr_block = "0.0.0.0/0"
   transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
 }
-
-# Setup routes to VPC2 on main route table
-#resource "aws_route" "vpc1_tgw_access" {
-#  route_table_id         = aws_vpc.vpc1.main_route_table_id
-#  destination_cidr_block = "172.22.0.0/16"
-#  transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
-#}
 
 # Our default security group to access the instances over all ports
 resource "aws_security_group" "vpc1_permissive" {
@@ -54,7 +56,7 @@ resource "aws_subnet" "vpc1_webserver_subnet1" {
   map_public_ip_on_launch = false
   availability_zone       = var.primary_az
   tags = {
-    Name = "VPC1-Webservers"
+    Name = "VPC1-Webservers1"
   }
 }
 

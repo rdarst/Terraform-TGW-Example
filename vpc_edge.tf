@@ -1,13 +1,27 @@
 resource "aws_vpc" "vpc_edge" {
-  cidr_block = "172.20.0.0/16"
+  cidr_block = "172.18.0.0/16"
   tags = {
     Name = "TGW_VPC_Edge"
   }
 }
 
-# Create an internet gateway to give our subnet access to the outside world
+# Create an internet gateway to give our subnet access to the outside world 
 resource "aws_internet_gateway" "vpc_edge_igw" {
   vpc_id = aws_vpc.vpc_edge.id
+}
+
+# Set the default route to send traffic to the edge VPC
+resource "aws_ec2_transit_gateway_route" "adddefault" {
+  destination_cidr_block         = "0.0.0.0/0"
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.tgw_attach_edge.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway.tgw.association_default_route_table_id
+}
+
+# Attach to vpc_edge
+resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach_edge" {
+  subnet_ids         = [aws_subnet.vpc_edge_nat_internal.id]
+  transit_gateway_id = aws_ec2_transit_gateway.tgw.id
+  vpc_id             = aws_vpc.vpc_edge.id
 }
 
 # Grant the VPC internet access on its main route table
@@ -17,37 +31,24 @@ resource "aws_route" "vpc_edge_internet_access" {
   gateway_id             = aws_internet_gateway.vpc_edge_igw.id
 }
 
-# Setup routes to VPC1 on main route table
-resource "aws_route" "vpc1_edge_tgw_access" {
-  route_table_id         = aws_vpc.vpc_edge.main_route_table_id
-  destination_cidr_block = "172.21.0.0/16"
-  transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
-}
-
-# Setup routes to VPC2 on main route table
-resource "aws_route" "vpc2_edge_tgw_access" {
-  route_table_id         = aws_vpc.vpc_edge.main_route_table_id
-  destination_cidr_block = "172.22.0.0/16"
-  transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
-}
-
 # Create Internal Route Table
 resource "aws_route_table" "internalrt" {
   vpc_id = aws_vpc.vpc_edge.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    network_interface_id = aws_network_interface.nat_nic2.id
-    instance_id = aws_instance.vpc_edge_web1.id
-   }
-  route {
-    cidr_block = "172.21.0.0/16"
-    transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
-   }
-  route {
-    cidr_block = "172.22.0.0/16"
-    transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
-   }
   }
+
+resource "aws_route" "vpcroutes" {
+    route_table_id = aws_route_table.internalrt.id
+    destination_cidr_block = "172.20.0.0/14"
+    transit_gateway_id     = aws_ec2_transit_gateway.tgw.id
+   }
+
+# Create Default route - Route is setup outside of Internal Route table block to prevent issues with diff
+resource "aws_route" "defaultroute" {
+    route_table_id = aws_route_table.internalrt.id
+    destination_cidr_block = "0.0.0.0/0"
+    network_interface_id = aws_network_interface.nat_nic2.id
+    #instance_id = aws_instance.vpc_edge_web1.id
+}
 
 resource "aws_route_table_association" "natInternalassociation" {
     subnet_id      = aws_subnet.vpc_edge_nat_internal.id
@@ -80,7 +81,7 @@ resource "aws_security_group" "vpc_edge_permissive" {
 # Define a NAT subnet primary availability zone
 resource "aws_subnet" "vpc_edge_nat_external" {
   vpc_id                  = aws_vpc.vpc_edge.id
-  cidr_block              = "172.20.0.0/24"
+  cidr_block              = "172.18.0.0/24"
   map_public_ip_on_launch = false
   availability_zone       = var.primary_az
   tags = {
@@ -91,7 +92,7 @@ resource "aws_subnet" "vpc_edge_nat_external" {
 # Define a NAT subnet primary availability zone
 resource "aws_subnet" "vpc_edge_nat_internal" {
   vpc_id                  = aws_vpc.vpc_edge.id
-  cidr_block              = "172.20.1.0/24"
+  cidr_block              = "172.18.1.0/24"
   map_public_ip_on_launch = false
   availability_zone       = var.primary_az
   tags = {
@@ -99,10 +100,10 @@ resource "aws_subnet" "vpc_edge_nat_internal" {
   }
 }
 
-# Create Nics needed for NAT Instance
+# Create Nics needed for Ubuntu NAT Instance
 resource "aws_network_interface" "nat_nic1" {
   subnet_id   = aws_subnet.vpc_edge_nat_external.id
-  private_ips = ["172.20.0.10"]
+  private_ips = ["172.18.0.10"]
   security_groups = [aws_security_group.vpc_edge_permissive.id]
   source_dest_check = false
   tags = {
@@ -112,7 +113,7 @@ resource "aws_network_interface" "nat_nic1" {
 
 resource "aws_network_interface" "nat_nic2" {
   subnet_id   = aws_subnet.vpc_edge_nat_internal.id
-  private_ips = ["172.20.1.10"]
+  private_ips = ["172.18.1.10"]
   security_groups = [aws_security_group.vpc_edge_permissive.id]
   source_dest_check = false
   tags = {
