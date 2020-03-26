@@ -7,6 +7,15 @@ iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -t nat -F POSTROUTING
 iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
+# Add Inbout NAT for Web Servers
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 8081 -j DNAT --to 172.21.5.20:80
+iptables -A FORWARD -p tcp -d 172.21.5.20 --dport 80 -j ACCEPT
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 8082 -j DNAT --to 172.22.5.20:80
+iptables -A FORWARD -p tcp -d 172.22.5.20 --dport 80 -j ACCEPT
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 8083 -j DNAT --to 172.23.5.20:80
+iptables -A FORWARD -p tcp -d 172.23.5.20 --dport 80 -j ACCEPT
+
+# Set webservers in the hosts file
 echo "172.21.5.20      vpc1-web1" | sudo tee -a /etc/hosts
 echo "172.22.5.20      vpc2-web1" | sudo tee -a /etc/hosts
 echo "172.23.5.20      vpc3-web1" | sudo tee -a /etc/hosts
